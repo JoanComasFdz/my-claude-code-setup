@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Code review</title>
+<style>
+/* ---- Design tokens (imitates visual-plan's --wf-* language) ---- */
+:root{
+  --wf-paper:#f6f6f4; --wf-card:#ffffff; --wf-ink:#1b1b1f; --wf-muted:#6c6c74;
+  --wf-line:#e5e5e2; --wf-radius:12px; --wf-shadow:0 1px 2px rgba(0,0,0,.05),0 8px 24px rgba(0,0,0,.04);
+  --sev-major:#c0392b; --sev-minor:#b07a12; --sev-info:#2f6fd0; --sev-clean:#2e9e6b;
+  --sev-major-bg:#fbe9e7; --sev-minor-bg:#fbf1dc; --sev-info-bg:#e8f0fc; --sev-clean-bg:#e6f6ee;
+  --add-bg:#e9f7ef; --add-ink:#1c7a45; --add-line:#bfe6cd;
+  --del-bg:#fdecea; --del-ink:#b12a1f; --del-line:#f2c9c3;
+  --code-bg:#fbfbfa; --code-ink:#26262b;
+  --t-k:#8250df; --t-s:#0a7d3f; --t-c:#8a8a92; --t-n:#b26b00; --t-t:#1f6fb2;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --wf-paper:#131316; --wf-card:#1c1c21; --wf-ink:#e9e9ee; --wf-muted:#9a9aa4;
+    --wf-line:#2c2c33; --wf-shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.3);
+    --sev-major:#ff6b5e; --sev-minor:#e0b64a; --sev-info:#6ea8ff; --sev-clean:#5fd39a;
+    --sev-major-bg:#3a201d; --sev-minor-bg:#33290f; --sev-info-bg:#182538; --sev-clean-bg:#16301f;
+    --add-bg:#132a1d; --add-ink:#68d69a; --add-line:#1f5137;
+    --del-bg:#331b18; --del-ink:#ff8a7e; --del-line:#5a2721;
+    --code-bg:#15151a; --code-ink:#d7d7de;
+    --t-k:#c299ff; --t-s:#5fd39a; --t-c:#7d7d87; --t-n:#e0a45a; --t-t:#79b8ff;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--wf-paper); color:var(--wf-ink);
+  font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  padding:28px 20px 80px;
+}
+.wrap{max-width:1040px;margin:0 auto}
+code,pre,.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace}
+a{color:var(--sev-info);text-decoration:none}
+a:hover{text-decoration:underline}
+h1{font-size:26px;margin:0 0 6px;letter-spacing:-.01em}
+.sub{color:var(--wf-muted);font-size:13.5px;margin:0 0 10px}
+.sub a{color:inherit;text-decoration:underline;text-decoration-color:var(--wf-line)}
+.stats{display:flex;gap:8px;align-items:baseline;font-size:13.5px;color:var(--wf-muted);margin:0 0 12px}
+.stats b{color:var(--wf-ink);font-weight:700;font-size:16px}
+.stats .sep{opacity:.5}
+.summary{margin:0 0 4px;padding:13px 16px;background:var(--wf-card);border:1px solid var(--wf-line);
+  border-radius:var(--wf-radius);box-shadow:var(--wf-shadow);font-size:14px}
+
+/* ---- top controls: severity filters + directory tree ---- */
+.panel{display:grid;grid-template-columns:1fr;gap:14px;margin:18px 0 6px}
+.sevrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.count{display:inline-flex;align-items:center;gap:8px;padding:7px 13px;border-radius:999px;
+  border:1px solid var(--wf-line);background:var(--wf-card);cursor:pointer;user-select:none;
+  font-weight:600;font-size:13.5px;transition:.12s}
+.count:hover{transform:translateY(-1px)}
+.count[aria-pressed="true"]{outline:2px solid currentColor;outline-offset:1px}
+.count .dot{width:10px;height:10px;border-radius:50%}
+.count.major{color:var(--sev-major)} .count.major .dot{background:var(--sev-major)}
+.count.minor{color:var(--sev-minor)} .count.minor .dot{background:var(--sev-minor)}
+.count.info{color:var(--sev-info)} .count.info .dot{background:var(--sev-info)}
+.count.clean{color:var(--sev-clean)} .count.clean .dot{background:var(--sev-clean)}
+.clearbtn{font-size:12.5px;color:var(--wf-muted);background:none;border:none;cursor:pointer;text-decoration:underline}
+.clearbtn[hidden]{display:none}
+
+/* ---- directory tree ---- */
+.tree{background:var(--wf-card);border:1px solid var(--wf-line);border-radius:var(--wf-radius);
+  box-shadow:var(--wf-shadow);padding:8px 6px;max-height:340px;overflow:auto}
+.tree .thead{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--wf-muted);padding:2px 10px 8px}
+.tnode{display:flex;align-items:center;gap:8px;padding:3px 10px;border-radius:7px;cursor:pointer;font-size:13px;line-height:1.5}
+.tnode:hover{background:color-mix(in srgb,var(--wf-paper) 60%,transparent)}
+.tnode.active{background:var(--sev-info-bg);outline:1px solid var(--sev-info)}
+.tdir .tname{font-weight:650}
+.tfile .tname{font-family:ui-monospace,monospace;font-size:12.5px}
+.tname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tguide{color:var(--wf-line)}
+.tcount{flex:none;font-weight:700;font-size:12px;min-width:20px;text-align:center;border-radius:999px;padding:1px 7px}
+.tcount.major{color:var(--sev-major);background:var(--sev-major-bg)}
+.tcount.minor{color:var(--sev-minor);background:var(--sev-minor-bg)}
+.tcount.info{color:var(--sev-info);background:var(--sev-info-bg)}
+.tdot{flex:none;width:8px;height:8px;border-radius:50%}
+.tdot.major{background:var(--sev-major)} .tdot.minor{background:var(--sev-minor)} .tdot.info{background:var(--sev-info)}
+
+/* ---- Sections ---- */
+.section{margin:30px 0 0}
+.section > h2{font-size:16px;margin:0 0 12px;display:flex;align-items:center;gap:9px;letter-spacing:.01em}
+.section > h2 .bar{width:4px;height:17px;border-radius:2px;background:var(--wf-muted)}
+.section.major > h2 .bar{background:var(--sev-major)}
+.section.minor > h2 .bar{background:var(--sev-minor)}
+.section.info > h2 .bar{background:var(--sev-info)}
+
+/* ---- Finding card ---- */
+.finding{background:var(--wf-card);border:1px solid var(--wf-line);border-radius:var(--wf-radius);
+  box-shadow:var(--wf-shadow);margin:0 0 14px;overflow:hidden}
+.finding.hidden{display:none}
+.f-head{display:flex;gap:11px;align-items:flex-start;padding:13px 15px;cursor:pointer}
+.f-head:hover{background:color-mix(in srgb,var(--wf-paper) 55%,transparent)}
+.badge{flex:none;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  padding:3px 8px;border-radius:6px;margin-top:1px}
+.badge.major{color:var(--sev-major);background:var(--sev-major-bg)}
+.badge.minor{color:var(--sev-minor);background:var(--sev-minor-bg)}
+.badge.info{color:var(--sev-info);background:var(--sev-info-bg)}
+.f-title{flex:1;min-width:0}
+.f-title .t{font-weight:650;font-size:15px}
+.f-title .loc{display:block;margin-top:3px;font-size:12.5px}
+.f-title .loc a{color:var(--wf-muted);border-bottom:1px dotted var(--wf-line)}
+.f-title .loc a:hover{color:var(--sev-info);border-bottom-color:currentColor}
+.f-title .loc .plain{color:var(--wf-muted)}
+.f-kind{flex:none;font-size:11px;color:var(--wf-muted);border:1px solid var(--wf-line);
+  border-radius:6px;padding:2px 7px;margin-top:1px}
+.chevron{flex:none;color:var(--wf-muted);transition:transform .15s;margin-top:2px}
+.finding.open .chevron{transform:rotate(90deg)}
+.f-body{display:none;padding:2px 15px 16px;border-top:1px solid var(--wf-line)}
+.finding.open .f-body{display:block}
+
+.callout{display:flex;gap:9px;background:var(--wf-paper);border:1px solid var(--wf-line);
+  border-left:3px solid var(--wf-muted);border-radius:8px;padding:9px 12px;margin:13px 0;font-size:13.5px}
+.callout .mark{flex:none;color:var(--wf-muted);font-weight:700}
+.callout q{font-style:italic;quotes:'“' '”'}
+.what{margin:0 0 4px;font-size:14px}
+
+.blocklabel{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--wf-muted);margin:16px 0 7px}
+
+/* ---- Code (annotated-code) ---- */
+.codewrap{border:1px solid var(--wf-line);border-radius:9px;overflow:hidden;background:var(--code-bg)}
+.codewrap .cap{display:flex;justify-content:space-between;gap:10px;padding:6px 11px;
+  border-bottom:1px solid var(--wf-line);font-size:12px;color:var(--wf-muted)}
+.codewrap .cap .fn{color:var(--wf-ink)}
+pre.code{margin:0;padding:0;overflow:auto}
+pre.code table{border-collapse:collapse;width:100%;font-size:13px;line-height:1.5}
+pre.code td{padding:0;vertical-align:top}
+pre.code td.ln{width:1%;white-space:nowrap;text-align:right;padding:1px 12px;color:var(--wf-muted);
+  user-select:none;opacity:.6}
+pre.code td.src{padding:1px 14px 1px 4px;white-space:pre;color:var(--code-ink)}
+pre.code tr.hl td{background:var(--sev-minor-bg)}
+pre.code tr.hl td.ln{box-shadow:inset 3px 0 0 var(--sev-minor)}
+.annot{font-size:12.5px;color:var(--wf-ink);background:var(--sev-minor-bg);border-top:1px dashed var(--sev-minor);
+  padding:6px 14px 6px 40px;position:relative}
+.annot::before{content:"↳";position:absolute;left:18px;color:var(--sev-minor);font-weight:700}
+.annot .lab{font-weight:700;margin-right:6px}
+.t-k{color:var(--t-k)} .t-s{color:var(--t-s)} .t-c{color:var(--t-c);font-style:italic} .t-n{color:var(--t-n)} .t-t{color:var(--t-t)}
+
+/* ---- Diff (suggestion) — stacked before over after ---- */
+.diff-intent{font-size:13px;color:var(--wf-muted);margin:0 0 8px}
+.diff-intent b{color:var(--sev-clean);font-weight:700}
+.diff{display:flex;flex-direction:column;gap:8px}
+.diff .side{border:1px solid var(--wf-line);border-radius:9px;overflow:hidden}
+.diff .side .cap{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:5px 11px}
+.diff .before .cap{color:var(--del-ink);background:var(--del-bg);border-bottom:1px solid var(--del-line)}
+.diff .after .cap{color:var(--add-ink);background:var(--add-bg);border-bottom:1px solid var(--add-line)}
+.diff pre{margin:0;padding:9px 12px;overflow:auto;font-size:13px;line-height:1.5;white-space:pre;
+  background:var(--code-bg);color:var(--code-ink)}
+.diff .before pre{background:color-mix(in srgb,var(--del-bg) 30%,var(--code-bg))}
+.diff .after pre{background:color-mix(in srgb,var(--add-bg) 30%,var(--code-bg))}
+.subtle{font-size:12px;color:var(--wf-muted);margin:10px 0 5px}
+
+/* ---- Blast radius (diagram) ---- */
+.blast{border:1px solid var(--wf-line);border-radius:9px;background:var(--wf-paper);padding:12px;margin:6px 0}
+.diagram{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.diagram-node{font-family:ui-monospace,monospace;font-size:12.5px;font-weight:700;padding:6px 11px;
+  border:1.5px solid var(--sev-info);color:var(--sev-info);border-radius:8px;background:var(--wf-card)}
+.diagram .arrow{color:var(--wf-muted)}
+.diagram .fan{display:flex;flex-direction:column;gap:6px}
+.diagram-pill{font-family:ui-monospace,monospace;font-size:12px;padding:4px 10px;border-radius:999px;
+  border:1px solid var(--wf-line);background:var(--wf-card);color:var(--wf-ink)}
+.callers{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.callers li{border:1px solid var(--wf-line);border-radius:8px;background:var(--wf-card);overflow:hidden}
+.callers .chdr{display:flex;justify-content:space-between;gap:8px;padding:6px 11px;font-size:12.5px;
+  border-bottom:1px solid var(--wf-line)}
+.callers .chdr .who{font-family:ui-monospace,monospace}
+.callers pre{margin:0;padding:8px 12px;overflow:auto;font-size:12.5px;white-space:pre;color:var(--code-ink);background:var(--code-bg)}
+.notes{margin:15px 0 0;font-size:13px;color:var(--wf-muted);border-top:1px dashed var(--wf-line);padding-top:10px}
+.notes b{color:var(--wf-ink);font-weight:600}
+
+/* ---- Judgment calls / clean / non-findings ---- */
+.qa{background:var(--wf-card);border:1px solid var(--wf-line);border-left:3px solid var(--sev-info);
+  border-radius:9px;padding:11px 14px;margin:0 0 10px}
+.qa .qt{font-weight:650;margin-bottom:3px}
+.qa .qd{font-size:13.5px}
+.qa .rec{font-size:12.5px;margin-top:6px;color:var(--sev-clean)}
+.qa .rec b{text-transform:uppercase;letter-spacing:.05em;font-size:11px}
+.twocol{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+@media(max-width:680px){.twocol{grid-template-columns:1fr}}
+.cleanitem{background:var(--wf-card);border:1px solid var(--wf-line);border-radius:9px;padding:9px 12px;font-size:13px}
+.cleanitem .ca{font-weight:650;color:var(--sev-clean);display:flex;gap:7px;align-items:center}
+.cleanitem .ca::before{content:"✓";color:var(--sev-clean)}
+.cleanitem .cn{color:var(--wf-muted);margin-top:2px}
+.foot{margin:34px 0 0;color:var(--wf-muted);font-size:12px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<!-- build.js replaces the marker below with the findings JSON -->
+<script id="review-data" type="application/json">__REVIEW_JSON__</script>
+
+<script>
+"use strict";
+(function(){
+  var data;
+  try { data = JSON.parse(document.getElementById("review-data").textContent); }
+  catch(e){ document.getElementById("app").innerHTML =
+    '<p style="color:#c0392b">Could not parse embedded review data: '+String(e)+'</p>'; return; }
+
+  var SEV = ["major","minor","info"];
+  var SEV_LABEL = {major:"Major",minor:"Minor",info:"Info"};
+  function sevName(i){ return SEV[i] || "info"; }
+
+  function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function el(tag, cls, html){ var e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e; }
+  function fileName(p){ p=String(p||""); var s=p.split("/"); return s[s.length-1]; }
+  function stripName(sig){ if(!sig) return "signature"; var m=String(sig).match(/([A-Za-z_][A-Za-z0-9_]*)\s*\(/); return m?m[1]:"signature"; }
+
+  var m = data.meta||{};
+  var repoUrl = (m.repoUrl||"").replace(/\/+$/,"");
+  // Link to a source location. With meta.repoUrl → absolute host link + #Lnn (works on GitHub).
+  // Without → root-relative, so it resolves when the report is served from the repo root.
+  function linkFor(path, line){
+    if(!path) return null;
+    if(repoUrl) return repoUrl + "/" + path + (line ? ("#L"+line) : "");
+    return "/" + path;
+  }
+
+  // ---- minimal C#/TS-ish syntax highlighter (operates on escaped text) ----
+  var KW = /\b(abstract|as|async|await|base|bool|break|byte|case|catch|char|class|const|continue|decimal|default|delegate|do|double|else|enum|event|explicit|extern|false|finally|fixed|float|for|foreach|get|goto|if|implicit|in|int|interface|internal|is|lock|long|namespace|new|null|object|operator|out|override|params|private|protected|public|readonly|record|ref|return|sbyte|sealed|set|short|sizeof|stackalloc|static|string|struct|switch|this|throw|true|try|typeof|uint|ulong|ushort|using|var|virtual|void|volatile|while|yield)\b/;
+  var TOKEN = new RegExp(
+    "(//[^\\n]*)" +
+    "|(@?\"(?:[^\"\\\\]|\\\\.)*\")" +
+    "|('(?:[^'\\\\]|\\\\.)*')" +
+    "|\\b(\\d[\\w.]*)\\b" +
+    "|" + KW.source +
+    "|\\b([A-Z][A-Za-z0-9_]*)\\b",
+    "g");
+  function hl(code){
+    return esc(code).replace(TOKEN, function(mm, c, ds, cs, num, kw, ty){
+      if(c)  return '<span class="t-c">'+mm+'</span>';
+      if(ds||cs) return '<span class="t-s">'+mm+'</span>';
+      if(num) return '<span class="t-n">'+mm+'</span>';
+      if(kw) return '<span class="t-k">'+mm+'</span>';
+      if(ty) return '<span class="t-t">'+mm+'</span>';
+      return mm;
+    });
+  }
+
+  function annotatedCode(block){
+    var wrap = el("div","codewrap");
+    if(block.filename || block.lang){
+      var cap = el("div","cap");
+      cap.innerHTML = '<span class="fn mono">'+esc(block.filename||"")+'</span><span>'+esc(block.lang||"")+'</span>';
+      wrap.appendChild(cap);
+    }
+    var lines = String(block.code||"").replace(/\n$/,"").split("\n");
+    var start = block.startLine || 1;
+    var annByLine = {};
+    (block.annotations||[]).forEach(function(a){
+      var first = parseInt(String(a.lines).split("-")[0],10);
+      (annByLine[first] = annByLine[first]||[]).push(a);
+    });
+    var pre = el("pre","code"); var tbl = el("table");
+    lines.forEach(function(ln,i){
+      var no = start+i;
+      var tr = el("tr"); if(annByLine[no]) tr.className="hl";
+      tr.innerHTML = '<td class="ln">'+no+'</td><td class="src">'+hl(ln)+'</td>';
+      tbl.appendChild(tr);
+    });
+    pre.appendChild(tbl); wrap.appendChild(pre);
+    Object.keys(annByLine).forEach(function(k){
+      annByLine[k].forEach(function(a){
+        var n = el("div","annot");
+        n.innerHTML = (a.label?'<span class="lab">'+esc(a.label)+'</span>':'') +
+          '<span class="mono" style="color:var(--sev-minor);opacity:.8">L'+esc(a.lines)+'</span> — '+esc(a.note);
+        wrap.appendChild(n);
+      });
+    });
+    return wrap;
+  }
+
+  function diffPair(beforeCode, afterCode){
+    var d = el("div","diff");
+    var b = el("div","side before"); b.appendChild(el("div","cap",null)).textContent="Before";
+    b.appendChild(el("pre",null,hl(beforeCode||"")));
+    var a = el("div","side after"); a.appendChild(el("div","cap",null)).textContent="After";
+    a.appendChild(el("pre",null,hl(afterCode||"")));
+    d.appendChild(b); d.appendChild(a); return d;
+  }
+
+  function blastRadius(f){
+    var box = el("div","blast");
+    var fnName = f.symbol || (f.suggestion && stripName(f.suggestion.before)) || "signature";
+    var dia = el("div","diagram");
+    dia.appendChild(el("div","diagram-node",null)).textContent = fnName;
+    if((f.callers||[]).length){
+      dia.appendChild(el("span","arrow",null)).textContent = "→";
+      var fan = el("div","fan");
+      f.callers.forEach(function(c){
+        var p = el("div","diagram-pill",null);
+        p.textContent = (c.name || fileName(c.path)) + (c.line?(":"+c.line):"");
+        fan.appendChild(p);
+      });
+      dia.appendChild(fan);
+    }
+    box.appendChild(dia);
+    if((f.callers||[]).length){
+      var ul = el("ul","callers");
+      f.callers.forEach(function(c){
+        var li = el("li");
+        var loc = (c.name?esc(c.name):esc(fileName(c.path)))+(c.line?(":"+c.line):"");
+        var href = linkFor(c.path, c.line);
+        var link = href ? '<a class="srclink" href="'+esc(href)+'" data-path="'+esc(c.path||"")+'" data-line="'+esc(c.line||"")+'">'+loc+'</a>' : '<span class="mono">'+loc+'</span>';
+        li.appendChild(el("div","chdr",'<span class="who">'+link+'</span><span class="mono" style="color:var(--wf-muted)">'+esc(c.path||"")+'</span>'));
+        if(c.snippet) li.appendChild(el("pre",null,hl(c.snippet)));
+        ul.appendChild(li);
+      });
+      box.appendChild(ul);
+    }
+    return box;
+  }
+
+  function renderFinding(f){
+    var card = el("div","finding open"); card.dataset.sev=f.severity; card.dataset.path=(f.location&&f.location.path)||"";
+    if(f.id) card.id = "finding-"+f.id;   // deep-link anchor: report.html#finding-<id>
+    var loc = f.location||{};
+    var locHref = linkFor(loc.path, loc.line);
+    var locText = esc((loc.path||"")+(loc.line?(":"+loc.line):"")+(loc.endLine?("-"+loc.endLine):""));
+    var head = el("div","f-head");
+    head.innerHTML =
+      '<span class="badge '+f.severity+'">'+SEV_LABEL[f.severity]+'</span>'+
+      '<span class="f-title"><span class="t">'+esc(f.title)+'</span>'+
+        '<span class="loc">'+(locHref?'<a class="srclink" href="'+esc(locHref)+'" data-path="'+esc(loc.path||"")+'" data-line="'+esc(loc.line||"")+'">'+locText+'</a>':'<span class="plain mono">'+locText+'</span>')+'</span>'+
+      '</span>'+
+      (f.kind?'<span class="f-kind">'+esc(f.kind)+'</span>':'')+
+      '<span class="chevron">▶</span>';
+    head.addEventListener("click", function(ev){ if(ev.target.closest("a")) return; card.classList.toggle("open"); });
+    card.appendChild(head);
+
+    var body = el("div","f-body");
+    if(f.convention){
+      body.appendChild(el("div","callout",'<span class="mark">§</span><span>Basis — <q>'+esc(f.convention)+'</q></span>'));
+    }
+    if(f.what) body.appendChild(el("p","what",esc(f.what)));
+
+    if(f.current){
+      body.appendChild(el("div","blocklabel",null)).textContent = "Current — code in context";
+      f.current.filename = f.current.filename || (loc.path && fileName(loc.path));
+      body.appendChild(annotatedCode(f.current));
+    }
+    if((f.callers||[]).length || f.kind==="signature"){
+      body.appendChild(el("div","blocklabel",null)).textContent = "Callers — blast radius";
+      body.appendChild(blastRadius(f));
+    }
+    if(f.suggestion){
+      body.appendChild(el("div","blocklabel",null)).textContent = "Suggestion";
+      if(f.suggestion.summary) body.appendChild(el("p","diff-intent",'<b>Intent:</b> '+esc(f.suggestion.summary)));
+      body.appendChild(diffPair(f.suggestion.before, f.suggestion.after));
+      if(f.suggestion.callerBefore || f.suggestion.callerAfter){
+        body.appendChild(el("div","subtle",null)).textContent="…and the example caller updates:";
+        body.appendChild(diffPair(f.suggestion.callerBefore, f.suggestion.callerAfter));
+      }
+    }
+    if(f.notes) body.appendChild(el("div","notes",'<b>Notes:</b> '+esc(f.notes)));
+    card.appendChild(body);
+    return card;
+  }
+
+  // ================= RENDER =================
+  var app = document.getElementById("app");
+  app.appendChild(el("h1",null,esc(m.title||"Code review")));
+  var subBits = [];
+  if(m.subproject) subBits.push(esc(m.subproject));
+  if(m.ruleset) subBits.push('against '+(m.ruleset.href?'<a class="srclink" href="'+esc(m.ruleset.href)+'" data-path="'+esc(m.ruleset.href)+'">'+esc(m.ruleset.label)+'</a>':esc(m.ruleset.label)));
+  if(m.scope) subBits.push(esc(m.scope));
+  if(m.date) subBits.push(esc(m.date));
+  app.appendChild(el("p","sub",subBits.join(" · ")));
+
+  var findings = (data.findings||[]).slice().sort(function(a,b){ return SEV.indexOf(a.severity)-SEV.indexOf(b.severity); });
+  var counts = {major:0,minor:0,info:0}; findings.forEach(function(f){ counts[f.severity]=(counts[f.severity]||0)+1; });
+  var cleanN = (data.clean||[]).length;
+  var distinctFiles = (function(){ var s={}; findings.forEach(function(f){ if(f.location&&f.location.path) s[f.location.path]=1; }); return Object.keys(s).length; })();
+
+  // stats strip (auto — the numbers the prose summary should NOT restate)
+  var stat = el("div","stats");
+  stat.innerHTML = '<b>'+findings.length+'</b> finding'+(findings.length===1?'':'s')+
+    ' <span class="sep">·</span> <b>'+distinctFiles+'</b> file'+(distinctFiles===1?'':'s')+' affected'+
+    (cleanN?' <span class="sep">·</span> <b>'+cleanN+'</b> areas checked clean':'');
+  app.appendChild(stat);
+  if(m.summary) app.appendChild(el("div","summary",esc(m.summary)));
+
+  // panel: severity filters + directory tree
+  var panel = el("div","panel");
+  var sevrow = el("div","sevrow");
+  SEV.forEach(function(s){
+    if(!counts[s]) return;
+    var c = el("button","count "+s);
+    c.setAttribute("aria-pressed","false");
+    c.innerHTML='<span class="dot"></span>'+counts[s]+' '+SEV_LABEL[s];
+    c.addEventListener("click",function(){ toggleSev(s); });
+    sevrow.appendChild(c);
+  });
+  var clear = el("button","clearbtn","clear filters"); clear.hidden=true;
+  clear.addEventListener("click",resetFilters); sevrow.appendChild(clear);
+  panel.appendChild(sevrow);
+  panel.appendChild(buildTreeView(findings));
+  app.appendChild(panel);
+
+  // findings grouped by severity
+  SEV.forEach(function(s){
+    var inSev = findings.filter(function(f){return f.severity===s;});
+    if(!inSev.length) return;
+    var sec = el("div","section "+s);
+    sec.appendChild(el("h2",null,'<span class="bar"></span>'+SEV_LABEL[s]+' <span style="color:var(--wf-muted);font-weight:400">('+inSev.length+')</span>'));
+    inSev.forEach(function(f){ sec.appendChild(renderFinding(f)); });
+    app.appendChild(sec);
+  });
+
+  if((data.judgmentCalls||[]).length){
+    var jc = el("div","section"); jc.appendChild(el("h2",null,'<span class="bar"></span>Judgment calls'));
+    data.judgmentCalls.forEach(function(q){
+      var c = el("div","qa");
+      c.appendChild(el("div","qt",esc(q.title)));
+      if(q.detail) c.appendChild(el("div","qd",esc(q.detail)));
+      if(q.recommendation) c.appendChild(el("div","rec",'<b>Recommend</b> — '+esc(q.recommendation)));
+      jc.appendChild(c);
+    });
+    app.appendChild(jc);
+  }
+  if((data.nonFindings||[]).length){
+    var nf = el("div","section"); nf.appendChild(el("h2",null,'<span class="bar"></span>Non-findings (looked, deemed compliant)'));
+    data.nonFindings.forEach(function(n){
+      var c=el("div","qa"); c.style.borderLeftColor="var(--wf-muted)";
+      c.appendChild(el("div","qt",esc(n.title)));
+      if(n.why) c.appendChild(el("div","qd",esc(n.why)));
+      nf.appendChild(c);
+    });
+    app.appendChild(nf);
+  }
+  if(cleanN){
+    var cl = el("div","section");
+    cl.appendChild(el("h2",null,'<span class="bar" style="background:var(--sev-clean)"></span>Checked &amp; clean'));
+    var grid = el("div","twocol");
+    data.clean.forEach(function(ci){
+      var it=el("div","cleanitem");
+      it.appendChild(el("div","ca",esc(typeof ci==="string"?ci:ci.area)));
+      if(ci.note) it.appendChild(el("div","cn",esc(ci.note)));
+      grid.appendChild(it);
+    });
+    cl.appendChild(grid); app.appendChild(cl);
+  }
+
+  app.appendChild(el("div","foot",'Generated by the <b>visual-review</b> skill · '+esc(m.date||"")));
+
+  // ---- click a source link → open the real file in VS Code at the line (via serve.js /__open) ----
+  // Falls back to navigating the normal link if the opener endpoint isn't running.
+  document.addEventListener("click", function(e){
+    var a = e.target.closest && e.target.closest("a.srclink");
+    if(!a) return;
+    var p = a.getAttribute("data-path"); if(!p) return;
+    var ln = a.getAttribute("data-line");
+    e.preventDefault();
+    if(typeof fetch !== "function"){ window.open(a.href, "_blank"); return; }
+    fetch("/__open?path="+encodeURIComponent(p)+(ln?("&line="+encodeURIComponent(ln)):""))
+      .then(function(r){ if(!r.ok) throw new Error("opener unavailable"); })
+      .catch(function(){ window.open(a.href, "_blank"); });
+  });
+
+  // ---- directory tree (summarized: single-child chains collapsed) ----
+  function buildTreeView(findings){
+    var root = {dirs:{}, files:{}, count:0, sev:99};
+    findings.forEach(function(f){
+      var parts = String(f.location&&f.location.path||"").split("/").filter(Boolean);
+      if(!parts.length) return;
+      var file = parts.pop();
+      var node = root, acc = "", chain=[root];
+      parts.forEach(function(seg){
+        acc = acc ? acc+"/"+seg : seg;
+        node.dirs[seg] = node.dirs[seg] || {name:seg, full:acc, dirs:{}, files:{}, count:0, sev:99};
+        node = node.dirs[seg]; chain.push(node);
+      });
+      var key = f.location.path;
+      node.files[key] = node.files[key] || {name:file, full:key, count:0, sev:99};
+      node.files[key].count++; node.files[key].sev = Math.min(node.files[key].sev, SEV.indexOf(f.severity));
+      chain.forEach(function(n){ n.count++; n.sev = Math.min(n.sev, SEV.indexOf(f.severity)); });
+    });
+
+    var wrap = el("div","tree");
+    wrap.appendChild(el("div","thead",null)).textContent = "Where — affected projects & folders";
+    renderNode(root, 0, wrap, true);
+    return wrap;
+
+    function collapse(node){
+      var label = node.name;
+      while(Object.keys(node.dirs).length===1 && Object.keys(node.files).length===0){
+        var only = node.dirs[Object.keys(node.dirs)[0]];
+        label = label ? label+"/"+only.name : only.name;
+        node = only;
+      }
+      return {label:label, node:node};
+    }
+    function renderNode(node, depth, container, isRoot){
+      Object.keys(node.dirs).sort().forEach(function(k){
+        var c = collapse(node.dirs[k]);
+        var row = el("div","tnode tdir"); row.style.paddingLeft = (depth*16+10)+"px";
+        row.dataset.dir = c.node.full;
+        row.innerHTML = '<span class="tguide">▸</span><span class="tname" title="'+esc(c.node.full)+'">'+esc(c.label)+'/</span>'+
+          '<span class="tcount '+sevName(c.node.sev)+'">'+c.node.count+'</span>';
+        row.addEventListener("click", function(){ togglePath("dir", c.node.full, row); });
+        container.appendChild(row);
+        renderNode(c.node, depth+1, container, false);
+      });
+      Object.keys(node.files).sort().forEach(function(fk){
+        var fn = node.files[fk];
+        var row = el("div","tnode tfile"); row.style.paddingLeft = (depth*16+10)+"px";
+        row.dataset.file = fn.full;
+        row.innerHTML = '<span class="tdot '+sevName(fn.sev)+'"></span><span class="tname" title="'+esc(fn.full)+'">'+esc(fn.name)+'</span>'+
+          '<span class="tcount '+sevName(fn.sev)+'">'+fn.count+'</span>';
+        row.addEventListener("click", function(){ togglePath("file", fn.full, row); });
+        container.appendChild(row);
+      });
+    }
+  }
+
+  // ---- filtering (severity + a path prefix from the tree) ----
+  var sevFilter = null, pathFilter = null;   // pathFilter = {type:'file'|'dir', path}
+  function toggleSev(s){
+    sevFilter = (sevFilter===s ? null : s);
+    [].forEach.call(document.querySelectorAll(".count"),function(b){
+      b.setAttribute("aria-pressed", b.classList.contains(s)&&sevFilter===s ? "true":"false"); });
+    apply();
+  }
+  function togglePath(type, path, row){
+    var same = pathFilter && pathFilter.type===type && pathFilter.path===path;
+    pathFilter = same ? null : {type:type, path:path};
+    [].forEach.call(document.querySelectorAll(".tnode"),function(r){ r.classList.remove("active"); });
+    if(!same) row.classList.add("active");
+    apply();
+  }
+  function resetFilters(){
+    sevFilter=null; pathFilter=null;
+    [].forEach.call(document.querySelectorAll(".count"),function(b){ b.setAttribute("aria-pressed","false"); });
+    [].forEach.call(document.querySelectorAll(".tnode"),function(r){ r.classList.remove("active"); });
+    apply();
+  }
+  function apply(){
+    [].forEach.call(document.querySelectorAll(".finding"),function(card){
+      var okSev = !sevFilter || card.dataset.sev===sevFilter;
+      var p = card.dataset.path;
+      var okPath = !pathFilter || (pathFilter.type==="file"
+        ? p===pathFilter.path
+        : (p===pathFilter.path || p.indexOf(pathFilter.path+"/")===0));
+      card.classList.toggle("hidden", !(okSev&&okPath));
+    });
+    [].forEach.call(document.querySelectorAll(".section"),function(sec){
+      var cards=sec.querySelectorAll(".finding");
+      if(cards.length){ var vis=[].some.call(cards,function(c){return !c.classList.contains("hidden");}); sec.style.display=vis?"":"none"; }
+    });
+    document.querySelector(".clearbtn").hidden = !(sevFilter||pathFilter);
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+{
+  "meta": {
+    "title": "Convention compliance review — src (production)",
+    "subproject": "variance-lots-check",
+    "reportSlug": "conventions-compliance-review",
+    "ruleset": { "label": "CONVENTIONS.md", "href": "variance-lots-check/CONVENTIONS.md" },
+    "scope": "src/ production (Core + Cli); Tests and obj/ excluded",
+    "date": "2026-07-01",
+    "summary": "The architecture backbone is sound; the highest-value fix is the null-forgiving ! on OpenXml, which can throw past the boundary catch. The rest are naming and null-as-absence idiom nits."
+  },
+  "findings": [
+    {
+      "id": "gen10sheet-openxml-null-forgiving",
+      "severity": "major",
+      "title": "Null-forgiving ! on OpenXml can throw NullReferenceException past the boundary catch",
+      "kind": "line",
+      "location": {
+        "path": "variance-lots-check/src/VarianceLotsCheck.Core/Gen10SheetLoading/Gen10Sheet.cs",
+        "line": 107,
+        "endLine": 116
+      },
+      "convention": "Boundary error policy — catch foreseeable exceptions at the boundary and wrap them in Result<_, Failure>.",
+      "what": "On a malformed workbook where sheet.Id / .Value is null, the null-forgiving ! yields a NullReferenceException. The surrounding catch filter (InvalidOperationException / IOException / FormatException / OpenXmlPackageException / XmlException / InvalidDataException) does not include NRE, so it escapes the boundary unwrapped.",
+      "current": {
+        "lang": "csharp",
+        "startLine": 103,
+        "code": "using var doc = SpreadsheetDocument.Open(workbook, isEditable: false);\nif (doc.WorkbookPart is not { } wb) return Optional.None<DateOnly>();\nvar sheet = wb.Workbook!.Descendants<Sheet>().FirstOrDefault(s => s.Name?.Value == SheetName);\nif (sheet is null) return Optional.None<DateOnly>();\nvar ws = (WorksheetPart)wb.GetPartById(sheet.Id!.Value!);\nvar shared = Xlsx.LoadSharedStrings(wb);\n\ndouble? max = null;\nusing var reader = OpenXmlReader.Create(ws);\nvar first = true;\nwhile (reader.Read())\n{\n    if (reader.ElementType != typeof(Row)) continue;\n    var row = (Row)reader.LoadCurrentElement()!;",
+        "annotations": [
+          { "lines": "107", "label": "NRE escapes", "note": "sheet.Id!.Value! throws NullReferenceException on a malformed workbook — NRE is not in the catch filter at line 126, so it leaves the boundary unwrapped." },
+          { "lines": "116", "note": "(Row)reader.LoadCurrentElement()! — the same latent NRE past the same catch." }
+        ]
+      },
+      "suggestion": {
+        "summary": "Guard the nullable explicitly and return None on absence instead of suppressing it with !.",
+        "before": "var ws = (WorksheetPart)wb.GetPartById(sheet.Id!.Value!);\n// ...\nvar row = (Row)reader.LoadCurrentElement()!;",
+        "after": "if (sheet.Id?.Value is not { } id) return Optional.None<DateOnly>();\nvar ws = (WorksheetPart)wb.GetPartById(id);\n// ...\nif (reader.LoadCurrentElement() is not Row row) continue;"
+      },
+      "notes": "Same latent gap in MitsuiParser.cs:24,32 (catch at :59-60) — fix both."
+    },
+    {
+      "id": "sucden-tryprompt-bool-sentinel",
+      "severity": "minor",
+      "title": "Sucden prompt-parse models absence as bool + out sentinel — use Optional<DateOnly>",
+      "kind": "signature",
+      "symbol": "TryPrompt",
+      "location": {
+        "path": "variance-lots-check/src/VarianceLotsCheck.Core/BrokerDocuments/Sucden/SucdenEquityParser.cs",
+        "line": 93,
+        "endLine": 100
+      },
+      "convention": "Honest, total signatures via our own Optional<T> — no null-as-absence, no partial functions, no exceptions-as-control-flow.",
+      "what": "Absence is modelled as bool + an out sentinel (prompt = default → 0001-01-01). Koch's identical concept already returns Optional<DateOnly> (ParsePrompt) — align to it.",
+      "current": {
+        "lang": "csharp",
+        "startLine": 93,
+        "code": "private static bool TryPrompt(PageRow row, out DateOnly prompt)\n{\n    foreach (var w in row.Words)\n        if (DateOnly.TryParseExact(w.Text, \"dd/MM/yy\", CultureInfo.InvariantCulture, DateTimeStyles.None, out prompt))\n            return true;\n    prompt = default;\n    return false;\n}",
+        "annotations": [
+          { "lines": "98", "label": "sentinel", "note": "prompt = default writes 0001-01-01, which leaks to the caller as if it were a real date when no dd/mm/yy is found." }
+        ]
+      },
+      "callers": [
+        {
+          "name": "ExtractPositions",
+          "path": "variance-lots-check/src/VarianceLotsCheck.Core/BrokerDocuments/Sucden/SucdenEquityParser.cs",
+          "line": 47,
+          "snippet": "if (!TryPrompt(row, out var prompt)) continue;   // only dated data rows"
+        }
+      ],
+      "suggestion": {
+        "summary": "Return Optional<DateOnly> (ReadPrompt) and pattern-match at the call site.",
+        "before": "private static bool TryPrompt(PageRow row, out DateOnly prompt)",
+        "after": "private static Optional<DateOnly> ReadPrompt(PageRow row)",
+        "callerBefore": "if (!TryPrompt(row, out var prompt)) continue;   // only dated data rows",
+        "callerAfter": "var prompt = ReadPrompt(row);\nif (prompt.Match(_ => false, _ => true)) continue;   // no dd/mm/yy prompt → skip\n// ... later: prompt.Match(some => { /* use some.Value */ return Unit.Value; }, () => Unit.Value);"
+      },
+      "notes": "Mirror KochParser.ParsePrompt (KochParser.cs:136), which already returns Optional<DateOnly>."
+    },
+    {
+      "id": "columns-columnat-bare-noun",
+      "severity": "minor",
+      "title": "Public ColumnAt is a bare noun — the verb rule wants ClassifyColumn / ResolveColumn",
+      "kind": "signature",
+      "symbol": "ColumnAt",
+      "location": {
+        "path": "variance-lots-check/src/VarianceLotsCheck.Core/BrokerDocuments/Pdf/Columns.cs",
+        "line": 7,
+        "endLine": 13
+      },
+      "convention": "Functions are actions — name them with a verb … never a bare noun (Fingerprint, Sides, BandValue). …At is not an exempt idiom (only Is/Has/Can and Parse/ToX/FromX).",
+      "what": "A public engine method named as a noun. It classifies an x-coordinate into a column, so a verb (ClassifyColumn / ResolveColumn) fits the Find…/Read…/Resolve… vocabulary the parsers already use.",
+      "current": {
+        "lang": "csharp",
+        "startLine": 7,
+        "code": "public static Column ColumnAt(double left, double longX, double shortX, double netX, double promptX)\n{\n    if (left >= longX && left < shortX) return Column.Long;\n    if (left >= shortX && left < netX) return Column.Short;\n    if (left >= netX && left < promptX) return Column.Net;\n    return Column.Other;\n}",
+        "annotations": [
+          { "lines": "7", "label": "noun", "note": "ColumnAt reads as a thing, not an action — rename to a verb." }
+        ]
+      },
+      "callers": [
+        {
+          "name": "ExtractPositions",
+          "path": "variance-lots-check/src/VarianceLotsCheck.Core/BrokerDocuments/Sucden/SucdenEquityParser.cs",
+          "line": 58,
+          "snippet": "switch (Columns.ColumnAt(w.Left, longX, shortX, netX, promptX))"
+        }
+      ],
+      "suggestion": {
+        "summary": "Rename to a verb and update every call site in one sweep.",
+        "before": "public static Column ColumnAt(double left, double longX, double shortX, double netX, double promptX)",
+        "after": "public static Column ClassifyColumn(double left, double longX, double shortX, double netX, double promptX)",
+        "callerBefore": "switch (Columns.ColumnAt(w.Left, longX, shortX, netX, promptX))",
+        "callerAfter": "switch (Columns.ClassifyColumn(w.Left, longX, shortX, netX, promptX))"
+      },
+      "notes": "Public API — every PDF parser that bands columns calls it; rename all sites together."
+    }
+  ],
+  "judgmentCalls": [
+    {
+      "title": "ValidatedFolder.Create is internal static, not a single-minter",
+      "detail": "The compile-time \"reconcile before validation\" guarantee holds across the assembly boundary (Cli cannot mint one), but intra-Core it is convention-enforced rather than type-enforced.",
+      "recommendation": "Accept as-is; if a single-minter guarantee is wanted, nest a construction token only PreFlight holds."
+    },
+    {
+      "title": "Reconciler.ClassifyVerdict has a defensive throw for an unreachable both-None case",
+      "detail": "The input (Optional<Agg>, Optional<Agg>) makes the both-None case representable, so the switch is partial and guarded at runtime rather than made unrepresentable.",
+      "recommendation": "Low priority; optionally feed a SheetOnly | ReportOnly | Both carrier DU built while walking the key union, making the switch total."
+    }
+  ],
+  "nonFindings": [
+    {
+      "title": "Numbers.ParseSigned returns decimal? (not Optional<decimal>)",
+      "why": "Deliberately kept 2026-06-30 — a value-type numeric-parse primitive in the broker-agnostic Pdf engine, not a domain/reference signature; converting would make the blessed AmtParser consumption pattern clunkier."
+    },
+    {
+      "title": "Severity has only Warning | Info, not Blocking | Warning | Info",
+      "why": "Governed by \"add a case only when the app branches on it\" — blocking is a separate terminal outcome (PreflightOutcome.Blocked); no Note is ever Blocking."
+    }
+  ],
+  "clean": [
+    { "area": "BrokerSlice registry", "note": "add-a-broker = folder + one registry line; no shared switch or classifier." },
+    { "area": "Slice independence", "note": "no broker slice imports a sibling slice (grep-verified)." },
+    { "area": "ValidatedFolder typestate", "note": "private ctor + internal static Create minted only by PreFlight; reconcile-before-validation won't compile." },
+    { "area": "ROP railway", "note": "Pipeline.Run composes Result-returning steps, short-circuits on first blocking error, no app-state object." },
+    { "area": "Effects as data", "note": "RunCore returns Effect.WriteReport; the impure edge Matches and executes it." },
+    { "area": "Dunet construction", "note": "new Result<>.Ok/.Error, Optional.Some/None helpers, explicit Match<T> type args used throughout." }
+  ]
+}
