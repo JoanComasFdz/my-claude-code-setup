@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "rules.json — validated rule set (DESIGN.md §6)",
+  "type": "object",
+  "required": ["source", "rules", "outOfScope"],
+  "additionalProperties": false,
+  "properties": {
+    "source": {
+      "type": "object",
+      "required": ["path", "contentHash"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string", "description": "path to the validated guidelines input" },
+        "contentHash": { "type": "string", "pattern": "^[a-f0-9]{64}$", "description": "SHA-256 of the source, for provenance" }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "description": "file-grain-decidable rules the review will enforce",
+      "items": {
+        "type": "object",
+        "required": ["id", "statement", "sourceAnchor"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "description": "folder shape: filename; freeform shape: slug of the statement" },
+          "statement": { "type": "string", "description": "the crisp normative rule; examples/rationale excluded" },
+          "sourceAnchor": { "type": "string", "description": "where in the guidelines this came from" },
+          "rationale": { "type": "string" }
+        }
+      }
+    },
+    "outOfScope": {
+      "type": "array",
+      "description": "sound rules excluded as not file-grain-decidable; reported, never silently dropped",
+      "items": {
+        "type": "object",
+        "required": ["statement", "reason"],
+        "additionalProperties": false,
+        "properties": {
+          "statement": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  }
+}

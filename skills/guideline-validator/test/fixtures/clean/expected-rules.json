@@ -1,0 +1,11 @@
+{
+  "source": { "path": "test/fixtures/clean/guidelines.md", "contentHash": "<sha256-at-runtime>" },
+  "rules": [
+    { "id": "name-functions-with-a-verb", "statement": "Name every function with a verb; a bare-noun name is not allowed.", "sourceAnchor": "## Naming" },
+    { "id": "constructors-do-no-work", "statement": "Constructors must not do work beyond assigning their fields.", "sourceAnchor": "## Construction" },
+    { "id": "immutable-record-types", "statement": "Every record type is immutable: no public setters — use init-only properties.", "sourceAnchor": "## Immutability" }
+  ],
+  "outOfScope": [
+    { "statement": "The domain layer must not depend on the infrastructure layer.", "reason": "needs a repo-level layer map to decide which module is which layer" }
+  ]
+}
