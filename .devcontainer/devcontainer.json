@@ -31,6 +31,11 @@
     }
   },
   "remoteUser": "node",
+  // Runs once after the container is created — i.e. after the persisted
+  // ~/.claude volume is mounted — so Claude Code plugins and MCP servers land
+  // on that volume. This can't be baked into the image: the volume would shadow
+  // anything the build wrote to ~/.claude.
+  "postCreateCommand": "bash .devcontainer/postCreateCommand.sh",
   "mounts": [
     "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
     "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume"

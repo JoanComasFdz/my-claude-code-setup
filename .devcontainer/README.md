@@ -22,6 +22,8 @@ is set up for you, the same way every time.
 - **Zsh, like your host** — Oh My Zsh + Spaceship prompt with the same plugins:
   `git`, `zsh-autosuggestions`, `zsh-syntax-highlighting`, `zoxide` (`z` to jump
   around), `eza` (the `l` alias), and more. Zsh is the default shell.
+- **Claude Code extras** — the `superpowers` plugin and the `context7` MCP
+  server are installed automatically after the container is created.
 
 ## Nice touches
 
@@ -59,3 +61,5 @@ Restart VS Code after installing. Any Nerd Font works — just match the name.
 - `Dockerfile` — how the image is built.
 - `1-install-vscode-cli.sh` — installs the VS Code CLI (for tunnels).
 - `2-install-zsh-config.sh` — installs Zsh, Oh My Zsh, Spaceship, and plugins.
+- `postCreateCommand.sh` — runs after the container is created; calls the step below.
+- `3-setup-claude-code.sh` — installs the `superpowers` plugin and `context7` MCP server.
