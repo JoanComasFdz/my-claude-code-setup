@@ -26,7 +26,8 @@
         "terminal.integrated.letterSpacing": 0.5,
         "terminal.integrated.fontLigatures.enabled": true,
         "chat.commandCenter.enabled": false,
-        "workbench.secondarySideBar.defaultVisibility": "hidden"
+        "workbench.secondarySideBar.defaultVisibility": "hidden",
+        "scm.defaultViewMode": "tree"
       }
     }
   },

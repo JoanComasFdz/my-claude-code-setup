@@ -35,6 +35,8 @@ is set up for you, the same way every time.
 - **Config is kept** — your Claude Code login/config survives rebuilds.
 - **No AI Chat pop-up** — VS Code's built-in Chat / AI-sessions panel stays
   hidden on startup, so it's out of the way.
+- **Source Control as a tree** — the Source Control **CHANGES** view shows files
+  as a folder tree, not a flat list (`scm.defaultViewMode`).
 - **Editor** — commands that open an editor (like `git commit`) use VS Code
   (`code --wait`) when you're attached to the IDE, and fall back to `nano`
   otherwise (for example over a raw tunnel).
