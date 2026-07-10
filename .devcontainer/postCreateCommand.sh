@@ -27,4 +27,11 @@ else
   echo "▶ postCreate: Claude Code setup reported issues (continuing anyway)." >&2
 fi
 
+# --- Claude Code: status line (ccstatusline) -------------------------------
+if bash "$SCRIPT_DIR/4-setup-ccstatusline.sh"; then
+  echo "▶ postCreate: ccstatusline setup done."
+else
+  echo "▶ postCreate: ccstatusline setup reported issues (continuing anyway)." >&2
+fi
+
 echo "▶ postCreate: complete."

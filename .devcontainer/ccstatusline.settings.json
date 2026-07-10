@@ -1,0 +1,98 @@
+{
+  "version": 3,
+  "lines": [
+    [
+      {
+        "id": "1",
+        "type": "model",
+        "color": "blue",
+        "rawValue": true
+      },
+      {
+        "id": "2",
+        "type": "separator",
+        "color": "blue"
+      },
+      {
+        "id": "3",
+        "type": "context-bar",
+        "color": "blue",
+        "rawValue": true,
+        "metadata": {
+          "display": "progress-short"
+        }
+      }
+    ],
+    [
+      {
+        "id": "6",
+        "type": "custom-text",
+        "color": "green",
+        "customText": " "
+      },
+      {
+        "id": "6b",
+        "type": "current-working-dir",
+        "color": "green",
+        "rawValue": true
+      },
+      {
+        "id": "7",
+        "type": "separator",
+        "color": "green"
+      },
+      {
+        "id": "8",
+        "type": "git-branch",
+        "color": "green"
+      },
+      {
+        "id": "9",
+        "type": "separator",
+        "color": "green"
+      },
+      {
+        "id": "10",
+        "type": "git-changes",
+        "color": "green"
+      }
+    ],
+    [
+      {
+        "id": "11",
+        "type": "session-clock",
+        "color": "yellow"
+      },
+      {
+        "id": "12",
+        "type": "separator",
+        "color": "yellow"
+      },
+      {
+        "id": "13",
+        "type": "block-timer",
+        "color": "yellow"
+      }
+    ]
+  ],
+  "flexMode": "full-minus-40",
+  "compactThreshold": 60,
+  "colorLevel": 2,
+  "inheritSeparatorColors": false,
+  "globalBold": false,
+  "gitCacheTtlSeconds": 5,
+  "minimalistMode": false,
+  "powerline": {
+    "enabled": false,
+    "separators": [
+      ""
+    ],
+    "separatorInvertBackground": [
+      false
+    ],
+    "startCaps": [],
+    "endCaps": [],
+    "autoAlign": false,
+    "continueThemeAcrossLines": false
+  }
+}

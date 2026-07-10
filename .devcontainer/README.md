@@ -24,6 +24,8 @@ is set up for you, the same way every time.
   around), `eza` (the `l` alias), and more. Zsh is the default shell.
 - **Claude Code extras** — the `superpowers` plugin and the `context7` MCP
   server are installed automatically after the container is created.
+- **Status line** — ccstatusline is enabled and pre-configured (model, context
+  length, git branch, git changes). Edit `ccstatusline.settings.json` to change it.
 
 ## Nice touches
 
@@ -63,3 +65,5 @@ Restart VS Code after installing. Any Nerd Font works — just match the name.
 - `2-install-zsh-config.sh` — installs Zsh, Oh My Zsh, Spaceship, and plugins.
 - `postCreateCommand.sh` — runs after the container is created; calls the step below.
 - `3-setup-claude-code.sh` — installs the `superpowers` plugin and `context7` MCP server.
+- `4-setup-ccstatusline.sh` — enables the ccstatusline status line.
+- `ccstatusline.settings.json` — ccstatusline layout (segments, colors, separators).
